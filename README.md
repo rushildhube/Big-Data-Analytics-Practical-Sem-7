@@ -11,7 +11,7 @@
 
 ## 📚 Project Overview
 
-This repository contains practical implementations and exercises for the Big Data Analytics Laboratory course. The practicals focus on exploratory data analysis, machine learning classification, and database query operations using Python.
+This repository contains practical implementations and exercises for the Big Data Analytics Laboratory course. The practicals focus on exploratory data analysis, machine learning classification, database query operations, and distributed computing paradigms using Python.
 
 ---
 
@@ -39,6 +39,12 @@ BDA LAB/
 │   ├── weather_snowfall_analysis.png
 │   ├── max_snowfall_2013.csv
 │   └── station_snowfall_stats_2013.csv
+│
+├── Movie Dataset/
+│   ├── mapreduce_movies.ipynb                      # Practical 5: MapReduce Implementation
+│   ├── mapreduce_analysis.png
+│   ├── mapreduce_movie_ratings.csv
+│   └── mapreduce_summary_statistics.csv
 │
 ├── requirements.txt                                # Python dependencies
 ├── .gitignore                                      # Git ignore file
@@ -114,6 +120,40 @@ BDA LAB/
 - SQLite database (weather_data.db)
 - CSV reports (max_snowfall, station statistics)
 - Visualization charts (snowfall analysis)
+
+---
+
+### Practical 5: MapReduce Implementation for Movie Rating Analysis
+**Location**: `Movie Dataset/mapreduce_movies.ipynb`
+
+**Objectives**:
+- Understand MapReduce paradigm for distributed computing
+- Implement Map function to extract movie ratings
+- Implement Reduce function to calculate average ratings per movie
+- Process movie dataset using MapReduce algorithm
+- Compare MapReduce results with Pandas groupby operations
+- Analyze and visualize movie rating statistics
+
+**MapReduce Architecture**:
+- **Map Phase**: Read each line, extract movie_id and rating, emit (movie_id, rating)
+- **Shuffle & Sort Phase**: Group ratings by movie_id
+- **Reduce Phase**: Calculate average rating for each movie
+
+**Key Functions**:
+- `map_function()`: Extract movie_id and rating from dataset
+- `reduce_function()`: Calculate average, count, and sum of ratings per movie
+
+**Outputs**:
+- Movie average ratings CSV with statistics
+- Summary statistics report
+- Distribution and comparison visualizations (4-panel plots)
+- Validation against Pandas groupby results
+
+**Key Insights**:
+- Processes 1000+ movie records efficiently
+- Demonstrates scalability of MapReduce paradigm
+- Enables parallel processing of large datasets
+- Verifies data consistency between implementations
 
 ---
 
@@ -214,6 +254,15 @@ jupyter nbconvert --to notebook --execute Iris\ Dataset/iris_dataset.ipynb
 - **Time Period**: 2013 full year data
 - **Analysis**: Maximum snowfall identification with monthly trends
 
+### Practical 5: MapReduce Movie Rating Analysis
+- **Dataset**: Movie ratings dataset with movie_id, user_id, rating, timestamp
+- **Total Records**: 1,000+ movie rating entries
+- **Unique Movies**: 50 movies analyzed
+- **Algorithm Efficiency**: MapReduce paradigm enables parallel processing
+- **Verification**: 100% match between MapReduce and Pandas groupby implementations
+- **Average Rating Range**: Typically 0.5 to 5.0 scale
+- **Key Metric**: Average rating per movie calculated using distributed computing approach
+
 ---
 
 ## 📝 Notes
@@ -272,12 +321,17 @@ This work is part of the coursework for ISBM College of Engineering.
 
 - Iris Dataset: https://archive.ics.uci.edu/ml/datasets/Iris
 - Pima Indians Diabetes Dataset: https://www.kaggle.com/uciml/pima-indians-diabetes-database
+- MovieLens Datasets: https://grouplens.org/datasets/movielens/
 - Scikit-learn Documentation: https://scikit-learn.org/
 - Pandas Documentation: https://pandas.pydata.org/
 - Matplotlib Documentation: https://matplotlib.org/
+- MapReduce: https://en.wikipedia.org/wiki/MapReduce
+- Hadoop MapReduce Tutorial: https://hadoop.apache.org/docs/stable/hadoop-mapreduce-client/hadoop-mapreduce-client-core/MapReduceTutorial.html
+- Google MapReduce Paper: https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/
 
 ---
 
 **Last Updated**: April 18, 2026
-#   B i g - D a t a - A n a l y t i c s - P r a c t i c a l - S e m - 7  
+#   B i g - D a t a - A n a l y t i c s - P r a c t i c a l - S e m - 7 
+ 
  
