@@ -1,0 +1,423 @@
+████████████████████████████████████████████████████████████████████████████████
+CAPITAL BIKESHARE TIME SERIES EDA - COMPREHENSIVE ANALYSIS
+████████████████████████████████████████████████████████████████████████████████
+
+================================================================================
+1. DATA LOADING AND BASIC INFORMATION
+================================================================================
+
+Dataset Shape: (501941, 13)
+Total Records: 501,941
+Total Features: 13
+
+--- Column Names and Data Types ---
+ride_id                   str
+rideable_type             str
+started_at                str
+ended_at                  str
+start_station_name        str
+start_station_id      float64
+end_station_name          str
+end_station_id        float64
+start_lat             float64
+start_lng             float64
+end_lat               float64
+end_lng               float64
+member_casual             str
+dtype: object
+
+--- First 5 Rows ---
+            ride_id  rideable_type               started_at  ...    end_lat    end_lng  member_casual
+0  32CDBB9F6B0108A4   classic_bike  2026-03-04 17:09:14.873  ...  38.880761 -77.005741         member
+1  02C9912EB52C6EB7  electric_bike  2026-03-25 17:08:43.055  ...  38.905496 -77.044976         member
+2  DEA73E1005AC1A34  electric_bike  2026-03-08 12:58:00.648  ...  38.880761 -77.005741         member
+3  9CDA9FA5F71B1190  electric_bike  2026-03-17 22:20:11.954  ...  38.880761 -77.005741         member
+4  118A6E7D72A45066  electric_bike  2026-03-29 15:49:33.847  ...  38.880761 -77.005741         member
+
+[5 rows x 13 columns]
+
+--- Basic Statistics ---
+       start_station_id  end_station_id      start_lat      start_lng        end_lat        end_lng
+count     428158.000000   423597.000000  501941.000000  501941.000000  501602.000000  501602.000000
+mean       31412.880712    31413.362071      38.906256     -77.032223      38.905765     -77.032060
+std          355.610998      356.342459       0.027106       0.033556       0.027156       0.033499
+min        30200.000000    30200.000000      38.766844     -77.419355      38.710000     -77.420000
+25%        31211.000000    31213.000000      38.894280     -77.044975      38.893860     -77.044976
+50%        31294.000000    31293.000000      38.905578     -77.030000      38.905424     -77.030000
+75%        31615.000000    31616.000000      38.919018     -77.012365      38.917764     -77.012289
+max        33204.000000    33204.000000      39.125856     -76.825535      39.170000     -76.810000
+
+================================================================================
+2. DATETIME CONVERSION AND TIME SERIES PREPARATION
+================================================================================
+
+✓ DateTime columns converted
+  - started_at: datetime64[us]
+  - ended_at: datetime64[us]
+
+--- Time Range of Data ---
+Start Date: 2026-02-27 23:12:11.997000
+End Date: 2026-03-31 23:58:51.919000
+Duration: 32 days
+
+--- Ride Duration Statistics (in minutes) ---
+Mean: 14.20 min
+Median: 8.85 min
+Std Dev: 44.82 min
+Min: 0.00 min
+Max: 1559.95 min
+
+================================================================================
+3. MISSING VALUES AND DATA QUALITY ANALYSIS
+================================================================================
+
+--- Missing Values ---
+                Column  Missing_Count  Percentage
+7       end_station_id          78344   15.608209
+6     end_station_name          78224   15.584302
+4   start_station_name          73783   14.699536
+5     start_station_id          73783   14.699536
+10             end_lat            339    0.067538
+11             end_lng            339    0.067538
+
+--- Duplicate Records ---
+Duplicate rows: 0
+
+--- Ride ID Uniqueness ---
+Total records: 501941
+Unique ride_ids: 501941
+Duplicate ride_ids: 0
+
+--- Invalid Ride Durations (negative) ---
+Count: 0
+
+================================================================================
+4. UNIVARIATE ANALYSIS
+================================================================================
+
+--- Rideable Type Distribution ---
+rideable_type
+electric_bike    351324
+classic_bike     150617
+Name: count, dtype: int64
+
+Percentage:
+rideable_type
+electric_bike    69.993087
+classic_bike     30.006913
+Name: proportion, dtype: float64
+
+--- User Type Distribution (Member vs Casual) ---
+member_casual
+member    361847
+casual    140094
+Name: count, dtype: int64
+
+Percentage:
+member_casual
+member    72.089548
+casual    27.910452
+Name: proportion, dtype: float64
+
+--- Start Station Analysis ---
+Total unique start stations: 822
+Missing start station names: 73783
+
+Top 10 Start Stations:
+start_station_name
+Columbus Circle / Union Station    4863
+New Hampshire Ave & T St NW        4134
+15th & P St NW                     3700
+Eastern Market Metro               3637
+14th & V St NW                     3511
+5th & K St NW                      3454
+14th & Irving St NW                3443
+1st & M St NE                      2975
+M St & Delaware Ave NE             2930
+Adams Mill & Columbia Rd NW        2846
+Name: count, dtype: int64
+
+--- End Station Analysis ---
+Total unique end stations: 822
+Missing end station names: 78224
+
+Top 10 End Stations:
+end_station_name
+Columbus Circle / Union Station    4845
+New Hampshire Ave & T St NW        4134
+15th & P St NW                     3683
+Eastern Market Metro               3611
+14th & V St NW                     3523
+5th & K St NW                      3502
+14th & Irving St NW                3094
+1st & M St NE                      2962
+M St & Delaware Ave NE             2949
+4th & Florida Ave NE               2828
+Name: count, dtype: int64
+
+--- Geographical Distribution ---
+Start Latitude - Min: 38.766844, Max: 39.125855923
+Start Longitude - Min: -77.4193554659783, Max: -76.825535
+End Latitude - Min: 38.71, Max: 39.17
+End Longitude - Min: -77.42, Max: -76.81
+
+================================================================================
+5. TEMPORAL PATTERNS ANALYSIS
+================================================================================
+
+--- Daily Distribution ---
+Mean daily rides: 15210.33
+Median daily rides: 16448.00
+Std Dev: 5972.21
+Min daily rides: 1
+Max daily rides: 25403
+
+--- Hourly Distribution ---
+Rides per hour:
+hour
+0      5449
+1      3048
+2      1819
+3      1251
+4      1198
+5      3023
+6      8631
+7     18731
+8     33240
+9     24463
+10    19382
+11    22159
+12    26917
+13    28620
+14    30223
+15    36822
+16    42693
+17    53640
+18    45469
+19    32224
+20    21905
+21    18134
+22    13670
+23     9230
+dtype: int64
+
+--- Day of Week Distribution ---
+Monday: 66,157 rides
+Tuesday: 81,942 rides
+Wednesday: 64,338 rides
+Thursday: 65,896 rides
+Friday: 59,145 rides
+Saturday: 79,628 rides
+Sunday: 84,835 rides
+
+--- Weekly Trend ---
+Mean weekly rides: 83656.83
+Rides per week (first 5):
+week
+9      12829
+10     88427
+11    113169
+12    117902
+13    128120
+dtype: int64
+
+--- Peak Hours ---
+Peak hour: 17:00 with 53,640 rides
+Lowest hour: 4:00 with 1,198 rides
+
+================================================================================
+6. USER BEHAVIOR ANALYSIS
+================================================================================
+
+--- Member vs Casual Ride Duration ---
+                count       mean     median        std       min          max
+member_casual                                                                
+casual         140094  21.665487  11.334017  70.961056  0.001733  1559.934333
+member         361847  11.315368   8.154067  28.418641  0.000667  1559.947717
+
+--- Member vs Casual by Rideable Type ---
+rideable_type  classic_bike  electric_bike
+member_casual                             
+casual                44464          95630
+member               106153         255694
+
+--- Hourly Patterns by User Type ---
+Top 3 peak hours by user type:
+member_casual  casual  member
+hour                         
+0                1795    3654
+1                1072    1976
+2                 692    1127
+
+--- Day of Week Patterns by User Type ---
+member_casual  casual  member
+dayname                      
+Friday          14987   44158
+Monday          15145   51012
+Saturday        30382   49246
+Sunday          30787   54048
+Thursday        15840   50056
+Tuesday         19133   62809
+Wednesday       13820   50518
+
+================================================================================
+7. BIKE TYPE ANALYSIS
+================================================================================
+
+--- Bike Type Distribution ---
+rideable_type
+electric_bike    351324
+classic_bike     150617
+Name: count, dtype: int64
+
+--- Average Ride Duration by Bike Type ---
+                count       mean     median        std
+rideable_type                                         
+classic_bike   150617  20.861820  10.296550  79.140651
+electric_bike  351324  11.349898   8.398033  12.580578
+
+--- Hourly Usage by Bike Type ---
+rideable_type  classic_bike  electric_bike
+hour                                      
+0                      1128           4321
+1                       555           2493
+2                       360           1459
+3                       231           1020
+4                       244            954
+5                       729           2294
+6                      2511           6120
+7                      5329          13402
+8                      9455          23785
+9                      7488          16975
+
+================================================================================
+8. OUTLIER DETECTION
+================================================================================
+
+--- Ride Duration Outliers (IQR Method) ---
+Q1 (25th percentile): 5.18 min
+Q3 (75th percentile): 14.96 min
+IQR: 9.78 min
+Lower Bound: -9.50 min
+Upper Bound: 29.63 min
+
+Outlier records: 38073 (7.59%)
+
+--- Extreme Values ---
+Rides > 2 hours: 2078
+Rides > 3 hours: 905
+Rides < 1 minute: 13003
+
+--- Geographical Outliers (extreme coordinates) ---
+Records with unusual start latitude: 1344
+
+================================================================================
+9. CORRELATION AND RELATIONSHIP ANALYSIS
+================================================================================
+
+--- Correlation Matrix (Numerical Variables) ---
+                   ride_duration_min      hour  dayofweek  start_lat  start_lng   end_lat   end_lng
+ride_duration_min           1.000000  0.005349   0.036057  -0.040046  -0.024664 -0.075591 -0.032656
+hour                        0.005349  1.000000  -0.022569  -0.024785  -0.027348  0.043380  0.018384
+dayofweek                   0.036057 -0.022569   1.000000   0.002792  -0.002649 -0.003000 -0.004046
+start_lat                  -0.040046 -0.024785   0.002792   1.000000   0.007433  0.820798  0.016433
+start_lng                  -0.024664 -0.027348  -0.002649   0.007433   1.000000  0.019516  0.835541
+end_lat                    -0.075591  0.043380  -0.003000   0.820798   0.019516  1.000000  0.012843
+end_lng                    -0.032656  0.018384  -0.004046   0.016433   0.835541  0.012843  1.000000
+
+--- Distance Analysis ---
+Average distance (lat/long degrees): 0.0197
+Distance std dev: 0.0156
+Max distance: 0.3642
+
+Correlation between distance and ride duration: 0.2506
+
+================================================================================
+10. SUMMARY STATISTICS FOR TIME SERIES ANALYSIS
+================================================================================
+
+--- Dataset Overview ---
+Total Rides: 501,941
+Time Period: 2026-02-27 23:12:11.997000 to 2026-03-31 23:58:51.919000
+Days Covered: 32 days
+
+--- Daily Aggregates ---
+
+First 10 days:
+            count  avg_duration  std_duration  avg_distance
+date                                                       
+2026-02-27      1       1499.89           NaN           NaN
+2026-02-28    105        377.71        614.32          0.02
+2026-03-01  12723         13.66         41.97          0.02
+2026-03-02   7605         10.12         36.81          0.02
+2026-03-03   7757         10.81         43.92          0.02
+2026-03-04  11787         10.66         25.08          0.02
+2026-03-05  14253         11.80         45.00          0.02
+2026-03-06  13985         11.78         42.65          0.02
+2026-03-07  16448         16.23         56.18          0.02
+2026-03-08  16592         16.20         44.18          0.02
+
+--- Hourly Aggregates (Average across all days) ---
+      total_rides  avg_duration  std_duration  member_rides
+hour                                                       
+0            5449         13.91         72.74          3654
+1            3048         12.29         45.06          1976
+2            1819         15.39         78.54          1127
+3            1251         12.30         44.03           813
+4            1198         14.32         62.70           849
+5            3023         11.39         48.65          2389
+6            8631         10.43         21.82          7033
+7           18731         11.41         39.29         15643
+8           33240         10.94         24.70         27877
+9           24463         12.45         35.90         19076
+10          19382         14.99         51.65         13793
+11          22159         16.29         55.58         15382
+12          26917         15.73         43.30         18529
+13          28620         16.01         43.31         19481
+14          30223         16.36         40.77         19655
+15          36822         16.17         50.59         24888
+16          42693         15.77         47.49         29747
+17          53640         15.10         46.04         39089
+18          45469         14.52         46.44         32432
+19          32224         13.03         42.76         23046
+20          21905         12.57         46.51         15991
+21          18134         12.26         44.58         13077
+22          13670         11.60         39.91          9896
+23           9230         11.53         47.13          6404
+
+--- Peak Traffic Times ---
+Top 5 peak hours:
+  17:00 - 53,640 rides
+  18:00 - 45,469 rides
+  16:00 - 42,693 rides
+  15:00 - 36,822 rides
+  08:00 - 33,240 rides
+
+================================================================================
+11. CREATING VISUALIZATIONS
+================================================================================
+✓ Saved: 01_hourly_distribution.png
+✓ Saved: 02_daily_trend.png
+✓ Saved: 03_day_of_week.png
+✓ Saved: 04_ride_duration_dist.png
+✓ Saved: 05_user_distribution.png
+✓ Saved: 06_bike_type.png
+✓ Saved: 07_heatmap_hour_dow.png
+✓ Saved: 08_member_vs_casual.png
+
+✓ All visualizations saved to ../Visualizations/
+
+████████████████████████████████████████████████████████████████████████████████
+EDA ANALYSIS COMPLETED SUCCESSFULLY!
+████████████████████████████████████████████████████████████████████████████████
+
+Next Steps for Time Series Analysis:
+  1. Decompose time series (trend, seasonality, residuals)
+  2. Check for stationarity (ADF test)
+  3. ACF/PACF analysis for ARIMA parameters
+  4. Build forecasting models (ARIMA, Prophet, etc.)
+  5. Anomaly detection on time series
+  6. Clustering analysis by temporal patterns
+
+
+✓ Processed dataset saved: capitalbikeshare_processed.csv

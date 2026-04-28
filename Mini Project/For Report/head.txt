@@ -1,0 +1,29 @@
+PS D:\BDA LAB> cd "d:\BDA LAB\Mini Project\Dataset" ; python -c "import pandas as pd; df = pd.read_csv('202603-capitalbikeshare-tripdata.csv'); print('Shape:', df.shape); print('\nColumns:', df.columns.tolist()); print('\nDtypes:\n', df.dtypes); print('\nFirst 3 rows:\n', df.head(3))"
+Shape: (501941, 13)
+
+Columns: ['ride_id', 'rideable_type', 'started_at', 'ended_at', 'start_station_name', 'start_station_id', 'end_station_name', 'end_station_id', 'start_lat', 'start_lng', 'end_lat', 'end_lng', 'member_casual']
+
+Dtypes:
+ ride_id                   str
+rideable_type             str
+started_at                str
+ended_at                  str
+start_station_name        str
+start_station_id      float64
+end_station_name          str
+end_station_id        float64
+start_lat             float64
+start_lng             float64
+end_lat               float64
+end_lng               float64
+member_casual             str
+dtype: object
+
+First 3 rows:
+             ride_id  rideable_type               started_at  ...    end_lat    end_lng  member_casual
+0  32CDBB9F6B0108A4   classic_bike  2026-03-04 17:09:14.873  ...  38.880761 -77.005741         member
+1  02C9912EB52C6EB7  electric_bike  2026-03-25 17:08:43.055  ...  38.905496 -77.044976         member
+2  DEA73E1005AC1A34  electric_bike  2026-03-08 12:58:00.648  ...  38.880761 -77.005741         member
+
+[3 rows x 13 columns]
+PS D:\BDA LAB\Mini Project\Dataset> 
