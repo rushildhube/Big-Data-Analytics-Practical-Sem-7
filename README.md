@@ -198,6 +198,32 @@ source myenv/bin/activate  # On Linux/Mac
 pip install -r requirements.txt
 ```
 
+---
+
+## 📈 Mini Project: Capital Bikeshare Forecast Studio
+
+The `Mini Project/` folder contains a time-series analysis and forecasting workflow for Capital Bikeshare trip data.
+
+### Run the forecasting model
+```bash
+cd "Mini Project"
+python .\App\main.py --mode electric_bike --model sarima --horizon 14 --save-model
+```
+
+### Launch the Streamlit dashboard
+```bash
+cd "Mini Project"
+streamlit run .\App\streamlit_app.py
+```
+
+### What the dashboard shows
+- EDA summary tables
+- Missing values, station counts, ride type distributions
+- All saved visualization charts
+- SARIMA / ARIMA tuning results
+- Rolling backtest results
+- Forecast table, metrics, and forecast chart
+
 Or install individually:
 ```bash
 pip install pandas numpy matplotlib seaborn scikit-learn scipy jupyter
