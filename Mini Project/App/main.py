@@ -58,6 +58,8 @@ class ModelSpec:
     order: tuple[int, int, int]
     seasonal_order: tuple[int, int, int, int]
     aic: float
+    validation_rmse: float
+    validation_mae: float
 
 
 def project_root() -> str:
@@ -122,6 +124,15 @@ def holdout_split(series: pd.DataFrame, horizon: int) -> tuple[pd.DataFrame, pd.
     return series.iloc[:-horizon].copy(), series.iloc[-horizon:].copy()
 
 
+def inner_train_validation_split(train: pd.Series, validation_size: int) -> tuple[pd.Series, pd.Series]:
+    validation_size = max(3, min(validation_size, max(3, len(train) // 4)))
+    if len(train) <= validation_size + 3:
+        validation_size = max(3, len(train) // 3)
+    if len(train) <= validation_size + 1:
+        raise ValueError("Not enough data for inner validation split.")
+    return train.iloc[:-validation_size].copy(), train.iloc[-validation_size:].copy()
+
+
 def metrics(actual: pd.Series, predicted: pd.Series) -> dict[str, float]:
     aligned = pd.concat([actual.rename("actual"), predicted.rename("predicted")], axis=1).dropna()
     error = aligned["actual"] - aligned["predicted"]
@@ -181,33 +192,66 @@ def tune_model(
     train: pd.Series,
     model_type: str,
     seasonal_period: int,
+    validation_size: int = 7,
     show_progress: bool = False,
 ) -> tuple[ModelSpec | None, object | None, pd.DataFrame]:
     rows = []
     best_result = None
     best_spec = None
 
+    inner_train, validation = inner_train_validation_split(train, validation_size)
+
     candidates = candidate_grid(model_type, seasonal_period)
     for order, seasonal_order in tqdm(candidates, enabled=show_progress, desc=f"Tuning {model_type.upper()}"):
         try:
-            result = fit_candidate(train, order, seasonal_order)
+            result = fit_candidate(inner_train, order, seasonal_order)
             if result is None:
                 break
+            validation_forecast = forecast_from_result(result, len(validation), validation.index)["forecast"]
+            validation_score = metrics(validation, validation_forecast)
             rows.append(
                 {
                     "model_type": model_type,
                     "order": str(order),
                     "seasonal_order": str(seasonal_order),
                     "aic": float(result.aic),
+                    "validation_mae": validation_score["MAE"],
+                    "validation_rmse": validation_score["RMSE"],
+                    "validation_mape": validation_score["MAPE"],
                 }
             )
-            if best_result is None or result.aic < best_result.aic:
+            if best_result is None:
                 best_result = result
-                best_spec = ModelSpec(model_type, order, seasonal_order, float(result.aic))
+                best_spec = ModelSpec(
+                    model_type,
+                    order,
+                    seasonal_order,
+                    float(result.aic),
+                    float(validation_score["RMSE"]),
+                    float(validation_score["MAE"]),
+                )
+            else:
+                current_best = (best_spec.validation_rmse, best_spec.aic) if best_spec is not None else (np.inf, np.inf)
+                candidate_score = (validation_score["RMSE"], float(result.aic))
+                if candidate_score < current_best:
+                    best_result = result
+                    best_spec = ModelSpec(
+                        model_type,
+                        order,
+                        seasonal_order,
+                        float(result.aic),
+                        float(validation_score["RMSE"]),
+                        float(validation_score["MAE"]),
+                    )
         except Exception:
             continue
 
-    tuning_table = pd.DataFrame(rows).sort_values("aic") if rows else pd.DataFrame(columns=["model_type", "order", "seasonal_order", "aic"])
+    if rows:
+        tuning_table = pd.DataFrame(rows).sort_values(["validation_rmse", "aic"])
+    else:
+        tuning_table = pd.DataFrame(
+            columns=["model_type", "order", "seasonal_order", "aic", "validation_mae", "validation_rmse", "validation_mape"]
+        )
     return best_spec, best_result, tuning_table
 
 
@@ -332,8 +376,15 @@ def run_pipeline(mode: str, model_type: str, horizon: int, seasonal_period: int,
     print(f"Seasonal period: {seasonal_period}")
 
     pretty_print_section(f"TUNING {model_type.upper()}")
-    best_spec, best_result, tuning_table = tune_model(train, model_type, seasonal_period, show_progress=show_progress)
-    if best_spec is None or best_result is None:
+    best_spec, _, tuning_table = tune_model(
+        train,
+        model_type,
+        seasonal_period,
+        validation_size=min(7, max(3, horizon // 2)),
+        show_progress=show_progress,
+    )
+    best_result = None
+    if best_spec is None:
         print("Statsmodels unavailable or all fits failed. Falling back to seasonal naive forecast.")
         forecast_series = seasonal_naive_forecast(train, horizon, seasonal_period)
         forecast_frame = pd.DataFrame(
@@ -343,11 +394,28 @@ def run_pipeline(mode: str, model_type: str, horizon: int, seasonal_period: int,
                 "upper": forecast_series * 1.1,
             }
         )
-        chosen_label = "seasonal_naive"
     else:
-        print(f"Best spec: order={best_spec.order}, seasonal_order={best_spec.seasonal_order}, AIC={best_spec.aic:.2f}")
-        forecast_frame = forecast_from_result(best_result, horizon, pd.date_range(train.index.max() + timedelta(days=1), periods=horizon, freq="D"))
-        chosen_label = f"{model_type}_best"
+        print(
+            f"Best spec: order={best_spec.order}, seasonal_order={best_spec.seasonal_order}, "
+            f"AIC={best_spec.aic:.2f}, validation RMSE={best_spec.validation_rmse:.2f}"
+        )
+        full_train_result = fit_candidate(train, best_spec.order, best_spec.seasonal_order)
+        if full_train_result is None:
+            forecast_series = seasonal_naive_forecast(train, horizon, seasonal_period)
+            forecast_frame = pd.DataFrame(
+                {
+                    "forecast": forecast_series,
+                    "lower": forecast_series * 0.9,
+                    "upper": forecast_series * 1.1,
+                }
+            )
+        else:
+            best_result = full_train_result
+            forecast_frame = forecast_from_result(
+                best_result,
+                horizon,
+                pd.date_range(train.index.max() + timedelta(days=1), periods=horizon, freq="D"),
+            )
 
     print_table("TOP TUNED MODELS", tuning_table.head(10))
 
@@ -357,7 +425,7 @@ def run_pipeline(mode: str, model_type: str, horizon: int, seasonal_period: int,
     print(f"RMSE: {holdout_scores['RMSE']:.2f}")
     print(f"MAPE: {holdout_scores['MAPE']:.2f}%")
 
-    backtest = rolling_backtest(train, best_spec if best_result is not None else None, seasonal_period, folds=3)
+    backtest = rolling_backtest(train, best_spec if best_spec is not None else None, seasonal_period, folds=3)
     print_table("ROLLING BACKTEST", backtest)
 
     outputs = output_directory()

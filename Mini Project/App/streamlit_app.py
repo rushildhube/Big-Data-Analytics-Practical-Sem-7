@@ -6,6 +6,9 @@ import sys
 import warnings
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+import threading
+import queue
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,15 +23,6 @@ if str(APP_DIR) not in sys.path:
 import main as forecast_main
 
 warnings.filterwarnings("ignore")
-
-
-st.set_page_config(
-    page_title="Capital Bikeshare Forecast Studio",
-    page_icon="\U0001F6B2",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 
 def inject_css() -> None:
     st.markdown(
@@ -67,20 +61,17 @@ def inject_css() -> None:
     )
 
 
-@st.cache_data(show_spinner=False)
 def load_dataset() -> pd.DataFrame:
     dataset_path = forecast_main.locate_dataset()
     return forecast_main.load_data(dataset_path)
 
 
-@st.cache_data(show_spinner=False)
 def load_csv(path: str) -> pd.DataFrame:
     if not os.path.exists(path):
         return pd.DataFrame()
     return pd.read_csv(path)
 
 
-@st.cache_data(show_spinner=False)
 def load_text(path: str) -> str:
     if not os.path.exists(path):
         return ""
@@ -181,10 +172,35 @@ def render_visualization_grid(image_paths: list[Path]) -> None:
         st.info("No visualization PNGs found yet.")
         return
 
+    # lightweight keyword -> description mapping for common saved plots
+    viz_descriptions = {
+        "hourly": "Hourly Ride Distribution: shows total rides aggregated by hour of day — useful to identify peak travel hours.",
+        "heatmap": "Hour vs Day-of-week Heatmap: highlights when rides are concentrated across week and day-hour combinations.",
+        "forecast": "Forecast plot: model predictions vs. observed values on the holdout period (includes baseline comparisons).",
+        "trend": "Daily Trend: aggregated daily ride counts showing short-term trends and spikes.",
+        "member": "Member vs Casual Distribution: breakdown of rider types (members and casual users).",
+        "dayofweek": "Rides by Day of Week: bar chart summarizing total rides per weekday.",
+        "duration": "Ride Duration Distribution: histogram of ride durations (0-60 minutes) showing skew and common trip lengths.",
+        "bike_type": "Bike Type Distribution: share of electric vs classic bikes in the dataset.",
+        "member_vs_casual": "Hourly Distribution by User Type: shows how members and casual users ride at different hours.",
+    }
+
     for idx in range(0, len(image_paths), 2):
         cols = st.columns(2)
         for col, image_path in zip(cols, image_paths[idx : idx + 2]):
-            col.image(str(image_path), caption=image_path.name, use_container_width=True)
+            name = image_path.name.lower()
+            caption = image_path.name
+            col.image(str(image_path), caption=caption, use_container_width=True)
+
+            # find best matching description by keyword
+            desc = None
+            for k, v in viz_descriptions.items():
+                if k in name:
+                    desc = v
+                    break
+            if not desc:
+                desc = "Visualization generated during EDA. Inspect the image to understand distributional or temporal patterns."
+            col.caption(desc)
 
 
 def compute_forecast_metrics(forecast_df: pd.DataFrame) -> pd.DataFrame:
@@ -220,13 +236,79 @@ def train_and_refresh(mode: str, model: str, horizon: int, seasonal_period: int,
         st.session_state["last_run"] = {"mode": mode, "model": model, "horizon": horizon, "seasonal_period": seasonal_period}
 
 
+def train_and_stream(mode: str, model: str, horizon: int, seasonal_period: int, save_model: bool) -> None:
+    """Run training in a thread and stream stdout/stderr into the Streamlit UI in real time."""
+    q: "queue.Queue[str]" = queue.Queue()
+
+    class QueueWriter:
+        def __init__(self, q: "queue.Queue[str]"):
+            self.q = q
+
+        def write(self, s: str) -> None:
+            if s:
+                try:
+                    self.q.put(s)
+                except Exception:
+                    pass
+
+        def flush(self) -> None:
+            return
+
+    def target() -> None:
+        old_out = sys.stdout
+        old_err = sys.stderr
+        sys.stdout = QueueWriter(q)
+        sys.stderr = QueueWriter(q)
+        try:
+            forecast_main.run_pipeline(
+                mode=mode,
+                model_type=model,
+                horizon=horizon,
+                seasonal_period=seasonal_period,
+                save_model=save_model,
+                show_progress=True,
+            )
+        finally:
+            sys.stdout = old_out
+            sys.stderr = old_err
+
+    thread = threading.Thread(target=target)
+    thread.start()
+
+    placeholder = st.empty()
+    buf = ""
+    # Poll queue and update UI until thread finishes
+    while thread.is_alive() or not q.empty():
+        try:
+            chunk = q.get(timeout=0.1)
+            buf += chunk
+        except queue.Empty:
+            pass
+        # keep the displayed content reasonably sized
+        placeholder.code(buf[-15000:])
+        time.sleep(0.1)
+
+    # drain remaining
+    while not q.empty():
+        buf += q.get()
+    placeholder.code(buf[-15000:])
+    st.session_state["last_console"] = buf
+    st.session_state["last_run"] = {"mode": mode, "model": model, "horizon": horizon, "seasonal_period": seasonal_period}
+
+
 def main() -> None:
+    st.set_page_config(
+        page_title="Capital Bikeshare Forecast Studio",
+        page_icon="\U0001F6B2",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
     inject_css()
 
     assets = project_asset_paths()
     outputs_dir = assets["outputs"]
     viz_dir = assets["visualizations"]
-    report_dir = assets["report"]
 
     df = load_dataset()
     tables = build_eda_tables(df)
@@ -255,7 +337,6 @@ def main() -> None:
         st.write(f"Dataset: `{forecast_main.locate_dataset()}`")
         st.write(f"Outputs: `{outputs_dir}`")
         st.write(f"Visualizations: `{viz_dir}`")
-        st.write(f"Report notes: `{report_dir}`")
 
     if train_now:
         train_and_refresh(mode, model, horizon, seasonal_period, save_model)
@@ -277,19 +358,60 @@ def main() -> None:
         )
         show_metric_row(tables["overview"])
 
-        c1, c2 = st.columns(2)
-        c1.markdown("### Report Summary")
-        report_text = load_text(str(report_dir / "eda.txt"))
-        if report_text:
-            c1.text_area("EDA summary notes", value=report_text[:4000], height=360)
-        else:
-            c1.info("No `eda.txt` report found.")
+        left, right = st.columns(2)
+        with left:
+            st.markdown("### EDA Snapshot")
+            for key, label in [
+                ("rideable_type", "Rideable Type Distribution"),
+                ("member_casual", "Member vs Casual Distribution"),
+                ("missing", "Missing Values"),
+            ]:
+                if key in tables:
+                    with st.expander(label, expanded=(key != "missing")):
+                        st.dataframe(tables[key], width="stretch")
 
-        c2.markdown("### Quick Dataset Sample")
-        c2.dataframe(df.head(10), use_container_width=True)
+        with right:
+            st.markdown("### Quick Dataset Sample")
+            st.dataframe(df.head(10), width="stretch")
+
+            st.markdown("### Top Stations")
+            station_tabs = st.tabs(["Start Stations", "End Stations"])
+            with station_tabs[0]:
+                if "top_start_stations" in tables:
+                    st.dataframe(tables["top_start_stations"], width="stretch")
+            with station_tabs[1]:
+                if "top_end_stations" in tables:
+                    st.dataframe(tables["top_end_stations"], width="stretch")
+
+        st.markdown("### Trend Tables")
+        trend_cols = st.columns(3)
+        for col, key, label in zip(
+            trend_cols,
+            ["daily_counts", "hourly_counts", "dayofweek_counts"],
+            ["Daily Counts", "Hourly Counts", "Day-of-Week Counts"],
+        ):
+            with col:
+                if key in tables:
+                    st.caption(label)
+                    st.dataframe(tables[key], width="stretch")
 
     with eda_tab:
         st.subheader("EDA Tables")
+        st.write(
+            "Below are the tabular summaries produced during exploratory data analysis. Expand each section for details and quick interpretation notes."
+        )
+        eda_descriptions = {
+            "missing": "Columns with missing values and their counts — helps identify which fields need imputation or filtering.",
+            "rideable_type": "Counts per bike type (electric vs classic). Useful for mode-specific demand analysis.",
+            "member_casual": "Breakdown of members vs casual riders to understand user composition.",
+            "top_start_stations": "Most frequently used start stations — helpful for station-level demand insights.",
+            "top_end_stations": "Most frequently used end stations — shows popular destinations.",
+            "duration_summary": "Summary statistics of trip durations to understand typical trip lengths and outliers.",
+            "daily_counts": "Daily aggregated ride counts showing overall trend and day-to-day variability.",
+            "hourly_counts": "Counts per hour of day summarizing diurnal patterns and peak hours.",
+            "dayofweek_counts": "Aggregate rides by weekday to identify weekday/weekend patterns.",
+            "correlations": "Pairwise correlations of numeric features — useful to spot multicollinearity or relationships.",
+        }
         for key, label in [
             ("missing", "Missing Values"),
             ("rideable_type", "Rideable Type Distribution"),
@@ -304,7 +426,11 @@ def main() -> None:
         ]:
             if key in tables:
                 with st.expander(label, expanded=(key in ["missing", "rideable_type"])):
-                    st.dataframe(tables[key], use_container_width=True)
+                    # short descriptive note for context
+                    desc = eda_descriptions.get(key, "")
+                    if desc:
+                        st.caption(desc)
+                    st.dataframe(tables[key], width="stretch")
 
     with viz_tab:
         st.subheader("Saved Visualizations")
@@ -318,10 +444,15 @@ def main() -> None:
         backtest_file = outputs_dir / f"backtest_{mode}_{model}.csv"
         plot_file = outputs_dir / f"forecast_{mode}_{model}.png"
 
+        # retrain button inside Forecasting tab (streams backend logs live)
+        st.markdown("#### Retrain model")
+        if st.button("Retrain (live)"):
+            train_and_stream(mode, model, horizon, seasonal_period, save_model)
+
         if forecast_file.exists():
             forecast_df = load_csv(str(forecast_file))
             st.markdown("#### Forecast Table")
-            st.dataframe(forecast_df, use_container_width=True)
+            st.dataframe(forecast_df, width="stretch")
 
             metric_df = compute_forecast_metrics(forecast_df)
             if not metric_df.empty:
@@ -343,10 +474,10 @@ def main() -> None:
 
         if tuning_file.exists():
             st.markdown("#### Model Tuning Table")
-            st.dataframe(load_csv(str(tuning_file)), use_container_width=True)
+            st.dataframe(load_csv(str(tuning_file)), width="stretch")
         if backtest_file.exists():
             st.markdown("#### Rolling Backtest")
-            st.dataframe(load_csv(str(backtest_file)), use_container_width=True)
+            st.dataframe(load_csv(str(backtest_file)), width="stretch")
 
         if st.session_state.get("last_console"):
             with st.expander("Console output", expanded=False):
@@ -355,11 +486,28 @@ def main() -> None:
     with data_tab:
         st.subheader("Raw / Processed Data")
         st.write("First 25 rows of the loaded dataset")
-        st.dataframe(df.head(25), use_container_width=True)
+        st.dataframe(df.head(25), width="stretch")
 
         st.markdown("#### Descriptive Statistics")
         try:
-            st.dataframe(df.describe(include="all").transpose(), use_container_width=True)
+            numeric_desc = df.describe(include=[np.number]).transpose().reset_index().rename(columns={"index": "column"})
+            st.markdown("**Numeric summary**")
+            st.dataframe(numeric_desc, width="stretch")
+
+            categorical_cols = [c for c in df.columns if df[c].dtype == "object" or str(df[c].dtype).startswith("string")]
+            if categorical_cols:
+                cat_summary = []
+                for col in categorical_cols[:12]:
+                    cat_summary.append(
+                        {
+                            "column": col,
+                            "non_null": int(df[col].notna().sum()),
+                            "unique": int(df[col].nunique(dropna=True)),
+                            "top_value": str(df[col].mode(dropna=True).iloc[0]) if not df[col].mode(dropna=True).empty else "",
+                        }
+                    )
+                st.markdown("**Categorical summary**")
+                st.dataframe(pd.DataFrame(cat_summary), width="stretch")
         except Exception:
             st.info("Could not compute full descriptive stats for this dataset.")
 
@@ -370,7 +518,7 @@ def main() -> None:
                 for file_path in sorted(folder.glob("*")):
                     if file_path.is_file():
                         project_files.append({"Folder": folder.name, "File": file_path.name})
-        st.dataframe(pd.DataFrame(project_files), use_container_width=True)
+        st.dataframe(pd.DataFrame(project_files), width="stretch")
 
 
 if __name__ == "__main__":
